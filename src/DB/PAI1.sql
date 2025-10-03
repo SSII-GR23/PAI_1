@@ -24,7 +24,7 @@ USE `PAI1` ;
 -- Table `PAI1`.`Usuarios`
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS `PAI1`.`Usuarios` (
-  `Id` INT NOT NULL,
+  `Id` INT NOT NULL AUTO_INCREMENT,
   `Usuario` VARCHAR(45) NULL,
   `Contraseña` VARCHAR(45) NULL,
   PRIMARY KEY (`Id`))
