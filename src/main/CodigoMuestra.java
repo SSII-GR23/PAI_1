@@ -1,3 +1,4 @@
+package main;
 
 import java.nio.charset.StandardCharsets;
 import java.security.InvalidKeyException;
@@ -14,6 +15,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import utils.*;
 
 public class CodigoMuestra {
 
@@ -61,8 +63,6 @@ public class CodigoMuestra {
 	
 	// =================== CONSTANTES / ESTADO =========================
     private static final String DB_FILE = "bbdd.db";
-    private static final String HMAC_ALGO = "HmacSHA256";
-    private static final String HASH_ALGO = "SHA-256";
     private static final int SALT_BYTES = 16; // 128 bits
     private static final int NONCE_BYTES = 16; // 128 bits
 	
@@ -71,96 +71,17 @@ public class CodigoMuestra {
     private static final Set<String> noncesEmpleados = new HashSet<>();
     private static Connection conn; // conexión a la base de datos
     
- // =================== UTILIDADES CRIPTOGRÁFICAS =====================
 
-    private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
-    
-    public static String bytesToHex(byte[] bytes) {
-        char[] hexChars = new char[bytes.length * 2];
-        for (int j = 0; j < bytes.length; j++) {
-            int v = bytes[j] & 0xFF;
-            hexChars[j * 2] = HEX_ARRAY[v >>> 4];
-            hexChars[j * 2 + 1] = HEX_ARRAY[v & 0x0F];
-        }
-        return new String(hexChars);
-    }
-
-    private static byte[] hexToBytes(String hex) {
-        int len = hex.length();
-        byte[] out = new byte[len / 2];
-        for (int i = 0; i < len; i += 2) {
-            out[i / 2] = (byte) ((Character.digit(hex.charAt(i), 16) << 4)
-                    + Character.digit(hex.charAt(i + 1), 16));
-        }
-        return out;
-    }
-
-    /**
-     * Genera salt criptográficamente seguro.
-     */
-    private static byte[] generateSalt(int length) {
-        SecureRandom rnd = new SecureRandom();
-        byte[] salt = new byte[length];
-        rnd.nextBytes(salt);
-        return salt;
-    }
-
-    /**
-     * Hash simple SHA-256. Devuelve hex string.
-     * Para mayor seguridad usar PBKDF2/BCrypt/Argon2.
-     */
-    private static String hashPasswordWithSalt(String password, byte[] salt) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance(HASH_ALGO);
-            digest.update(salt); // incluir salt antes de la contraseña
-            byte[] hashed = digest.digest(password.getBytes(StandardCharsets.UTF_8));
-            return bytesToHex(hashed);
-           
-        } catch (NoSuchAlgorithmException e) {
-            throw new RuntimeException("Algoritmo de hash no disponible: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Crea HMAC-SHA256 y devuelve hex string
-     */
-    private static String createMac(String message, byte[] key) {
-        try {
-            Mac mac = Mac.getInstance(HMAC_ALGO);
-            SecretKeySpec keySpec = new SecretKeySpec(key, HMAC_ALGO);
-	            mac.init(keySpec);
-            byte[] macBytes = mac.doFinal(message.getBytes(StandardCharsets.UTF_8));
-            return bytesToHex(macBytes);
-        } catch (NoSuchAlgorithmException | InvalidKeyException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
 
     /**
      * Comparación segura (tiempo constante) de MACs o hashes representados como hex.
      */
     private static boolean secureEqualsHex(String aHex, String bHex) {
         if (aHex == null || bHex == null) return false;
-        byte[] a = hexToBytes(aHex);
-        byte[] b = hexToBytes(bHex);
+        byte[] a = utils.Parser.hexToBytes(aHex);
+        byte[] b = utils.Parser.hexToBytes(bHex);
         return MessageDigest.isEqual(a, b);
-    }
-
-    private static byte[] generateNonce(int length) {
-        SecureRandom rnd = new SecureRandom();
-        byte[] n = new byte[length];
-        rnd.nextBytes(n);
-        return n;
-    }
-
-    private static byte[] generateServerSecretKey(int lengthBytes) {
-        SecureRandom rnd = new SecureRandom();
-        byte[] key = new byte[lengthBytes];
-        rnd.nextBytes(key);
-        return key;
-    }
-    
+    }    
  // =================== BBDD (SQLite) ==============================
 
     /**
@@ -228,9 +149,9 @@ public class CodigoMuestra {
         }
 
         // generar salt y hash
-        byte[] salt = generateSalt(SALT_BYTES);
-        String saltHex = bytesToHex(salt);
-        String hash = hashPasswordWithSalt(password, salt);
+        byte[] salt = utils.Generators.salt(SALT_BYTES);
+        String saltHex = utils.Parser.bytesToHex(salt);
+        String hash = utils.Generators.hashWithSalt(password, salt);
 
         String insert = "INSERT INTO usuarios(username, password_hash, salt) VALUES(?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(insert)) {
@@ -257,8 +178,8 @@ public class CodigoMuestra {
                 if (!rs.next()) return false;
                 String storedHash = rs.getString("password_hash");
                 String saltHex = rs.getString("salt");
-                byte[] salt = hexToBytes(saltHex);
-                String computed = hashPasswordWithSalt(password, salt);
+                byte[] salt = utils.Parser.hexToBytes(saltHex);
+                String computed = utils.Generators.hashWithSalt(password, salt);
                 // comparación segura
                 return secureEqualsHex(storedHash, computed);
             }
@@ -292,11 +213,11 @@ public class CodigoMuestra {
      */
     public static String enviarTransferenciaSegura(String transferenciaBase) {
         // transferenciaBase ejemplo: "ES8384:ES3476:1000"
-        byte[] nonceBytes = generateNonce(NONCE_BYTES);
-        String nonceHex = bytesToHex(nonceBytes);
+        byte[] nonceBytes = utils.Generators.nonce(NONCE_BYTES);
+        String nonceHex = utils.Parser.bytesToHex(nonceBytes);
 
         String mensajeParaMac = transferenciaBase + ":" + nonceHex;
-        String mac = createMac(mensajeParaMac, SECRET_KEY);
+        String mac = utils.Generators.mac(mensajeParaMac, SECRET_KEY);
         if (mac == null) return null;
 
         String mensajeTotal = mensajeParaMac + ":" + mac;
@@ -308,7 +229,7 @@ public class CodigoMuestra {
      */
     public static boolean verificarMac(String transferenciaCompleta, String macRecibido) {
         // transferenciaCompleta debe ser "origen:destino:cantidad:nonce"
-        String macCalculado = createMac(transferenciaCompleta, SECRET_KEY);
+        String macCalculado = utils.Generators.mac(transferenciaCompleta, SECRET_KEY);
         return secureEqualsHex(macCalculado, macRecibido);
     }
 
@@ -352,7 +273,7 @@ public class CodigoMuestra {
         if (!verificarMac(mensajeBase, mac)) {
             System.err.println("ERROR: MAC inválido. El mensaje ha sido alterado o clave incorrecta.");
             System.out.println("MAC recibido: " + mac);
-            String esperado = createMac(mensajeBase, SECRET_KEY);
+            String esperado =  utils.Generators.mac(mensajeBase, SECRET_KEY);
             System.out.println("MAC esperado: " + esperado);
             return;
         }
