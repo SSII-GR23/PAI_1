@@ -88,6 +88,7 @@ public class Main {
             return c;
         } catch (SQLException e) {
             System.err.println("Error creando conexión: " + e.getMessage());
+            System.out.println("¿Has añadido la dependencia de SQLite en el pom.xml?");
             return null;
         }
     }
