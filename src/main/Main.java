@@ -11,7 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-public class CodigoMuestra {
+public class Main {
 
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
@@ -330,7 +330,4 @@ public class CodigoMuestra {
             System.out.println("Error: formato de comando incorrecto.");
         }
     }
-    
-    
-
 }
