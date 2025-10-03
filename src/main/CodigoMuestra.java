@@ -1,10 +1,7 @@
 package main;
 
 import java.nio.charset.StandardCharsets;
-import java.security.InvalidKeyException;
 import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.util.HashSet;
 import java.util.Set;
 import java.sql.Connection;
@@ -13,9 +10,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
-import utils.*;
 
 public class CodigoMuestra {
 
