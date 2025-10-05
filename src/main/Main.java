@@ -2,14 +2,15 @@ package main;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.HashSet;
-import java.util.Set;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.HashSet;
+import java.util.Scanner;
+import java.util.Set;
 
 public class Main {
 
@@ -17,14 +18,55 @@ public class Main {
 		// TODO Auto-generated method stub
 		System.out.println("=== Inicializando servidor (demo) ===");
         initDatabase();
-
-        // 1) crear usuarios de prueba (si no existen)
-        if (registrarUsuario("usuarioPrueba", "password123")) {
-            System.out.println("Usuario 'usuarioPrueba' creado para pruebas.");
-        } else {
-            System.out.println("Usuario 'usuarioPrueba' ya existe o no se pudo crear.");
+        //Comenzamos registrando 3 usuarios por defecto
+        registrarUsuario("Paco Flores", "paquito33");
+        registrarUsuario("Alberto Chicote", "PesadillaCocina78");
+        registrarUsuario("David Bisbal", "AveMaria45");
+        
+        //Le preguntamos al usuario que quiere hacer
+        Scanner opciones = new Scanner(System.in);
+        System.out.println("¿Que quiere hacer?:\n"+"1-Iniciar sesion\n"+"2-Registrar usuario");
+        int opcion = opciones.nextInt();
+        String user, passw;
+        boolean intentos = false;
+        boolean sesionIniciada=false;
+        int i=0;
+        while(!intentos) {
+        if(opcion==1) {
+        	System.out.println("Introduce tu usuario:");
+            user = opciones.next();
+            System.out.println("Introduce tu contraa:");
+            passw = opciones.next();
+            manejoCredenciales(user, passw);
+            
+			if (manejoCredenciales(user, passw)) {
+				System.out.println("Has iniciado sesion con exito");
+				intentos = true;
+			} else {
+				System.out.println("Usuario o contrasea incorrectos");
+		        i++;
+			}
         }
+		else if (opcion == 2) {
+			System.out.println("Introduce el usuario que quieres registrar:");
+			user = opciones.next();
+			System.out.println("Introduce la contraseña que quieres registrar:");
+			passw = opciones.next();
+			boolean registro = registrarUsuario(user, passw);
+			if (registro) {
+                System.out.println("Usuario registrado con exito");
+                intentos = true;
+            } else {
+                System.out.println("El usuario ya existe");
+            }
+		}
 
+        if(i==3) {
+        System.out.println("Demasiados intentos fallidos");
+        intentos = true;
+        
+        }
+        }
         // 2) Simular login y transferencias
         boolean acceso = manejoCredenciales("usuarioPrueba", "password123");
         System.out.println("¿Acceso concedido? " + acceso);
@@ -119,6 +161,7 @@ public class Main {
         try (Statement st = conn.createStatement()) {
             st.execute(createUsuarios);
             st.execute(createTrans);
+            System.out.println("Base de datos inicializada correctamente.");
         } catch (SQLException e) {
             throw new RuntimeException("Error creando tablas: " + e.getMessage(), e);
         }
