@@ -1,4 +1,5 @@
 package main;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -7,49 +8,43 @@ import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 
-
 public class ServerSocket1 {
-	
-	public static void main(String[] args) throws IOException,          
-                           InterruptedException {
 
-		
+	public static void main(String[] args) throws IOException, InterruptedException {
+
 		// perpetually listen for clients
 		ServerSocket serverSocket = new ServerSocket(4011);
 		while (true) {
 
-		// wait for client connection and check login information
-		try {
-		System.err.println("Waiting for connection...");
-						
-		Socket socket = serverSocket.accept();	
+			// wait for client connection and check login information
+			try {
+				System.err.println("Waiting for connection...");
 
-		// open BufferedReader for reading data from client
-		BufferedReader input = new BufferedReader(new
-                               InputStreamReader(socket.getInputStream()));
+				Socket socket = serverSocket.accept();
 
-		// open PrintWriter for writing data to client
-		PrintWriter output = new PrintWriter(new 
-                    OutputStreamWriter(socket.getOutputStream()));
-		String userName = input.readLine();
-		String password = input.readLine();
-		output.println("User, " + userName);
-		output.println("Pass, " + password);
-			
+				// open BufferedReader for reading data from client
+				BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-		output.close();
-		input.close();
-		socket.close();
+				// open PrintWriter for writing data to client
+				PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
+				String userName = input.readLine();
+				String password = input.readLine();
+				output.println("User, " + userName);
+				output.println("Pass, " + password);
 
-		} // end try
+				output.close();
+				input.close();
+				socket.close();
 
-		// handle exception communicating with client
-		catch (IOException ioException) {
-			ioException.printStackTrace();
-		}
+			} // end try
 
-	} // end while
+			// handle exception communicating with client
+			catch (IOException ioException) {
+				ioException.printStackTrace();
+			}
 
-   }
+		} // end while
+
+	}
 
 }

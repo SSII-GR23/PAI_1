@@ -1,4 +1,5 @@
 package main;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -15,56 +16,52 @@ public class LoginClientSocket {
 	 * @throws IOException
 	 */
 	public static void main(String[] args) throws IOException {
-	try {
+		try {
 
-		// create Socket from factory
-		Socket socket = new Socket("172.20.10.2", 4011);
+			// create Socket from factory
+			Socket socket = new Socket("172.20.10.2", 4011);
 
-		// create PrintWriter for sending login to server
-		PrintWriter output = new PrintWriter(new OutputStreamWriter(
-					socket.getOutputStream()));
-		// prompt user for user name
-		String userName = JOptionPane.showInputDialog(null,
-					"Enter User Name:");
+			// create PrintWriter for sending login to server
+			PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
+			// prompt user for user name
+			String userName = JOptionPane.showInputDialog(null, "Enter User Name:");
 
-		// send user name to server
-		output.println(userName);
+			// send user name to server
+			output.println(userName);
 
-		// prompt user for password
-		String password = JOptionPane.showInputDialog(null,
-					"Enter Password:");
+			// prompt user for password
+			String password = JOptionPane.showInputDialog(null, "Enter Password:");
 
-		// send password to server
-		output.println(password);
+			// send password to server
+			output.println(password);
 
-		output.flush();
+			output.flush();
 
-		// create BufferedReader for reading server response
-		BufferedReader input = new BufferedReader(new InputStreamReader(
-					socket.getInputStream()));
+			// create BufferedReader for reading server response
+			BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 
-		// read response from server
-		String response = input.readLine();
+			// read response from server
+			String response = input.readLine();
 
-		// display response to user
-		JOptionPane.showMessageDialog(null, response);
+			// display response to user
+			JOptionPane.showMessageDialog(null, response);
 
-		// clean up streams and Socket
-		output.close();
-		input.close();
-		socket.close();
+			// clean up streams and Socket
+			output.close();
+			input.close();
+			socket.close();
 
-	} // end try
+		} // end try
 
-	// handle exception communicating with server
-	catch (IOException ioException) {
-		ioException.printStackTrace();
+		// handle exception communicating with server
+		catch (IOException ioException) {
+			ioException.printStackTrace();
+		}
+
+		// exit application
+		finally {
+			System.exit(0);
+		}
+
 	}
-
-	// exit application
-	finally {
-		System.exit(0);
-	}
- 
-    }
 }
