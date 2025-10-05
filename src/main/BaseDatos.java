@@ -6,8 +6,6 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
-import java.util.HashSet;
-import java.util.Set;
 
 // =================== BBDD (SQLite) ==============================
 public class BaseDatos {
@@ -45,6 +43,14 @@ public class BaseDatos {
         } catch (SQLException e) {
             throw new RuntimeException("Error creando tablas: " + e.getMessage(), e);
         }
+    }
+    
+    public static void initDemo() {
+    	init();
+    	
+        BaseDatos.userSign("Paco Flores", "paquito33");
+        BaseDatos.userSign("Alberto Chicote", "PesadillaCocina78");
+        BaseDatos.userSign("David Bisbal", "AveMaria45");
     }
 
     /**
