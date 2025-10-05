@@ -10,11 +10,6 @@ import java.net.Socket;
 
 public class ServerSocket1 {
 	
-	/**
-	 * @param args
-	 * @throws IOException 
-	 * @throws InterruptedException 
-	 */
 	public static void main(String[] args) throws IOException,          
                            InterruptedException {
 

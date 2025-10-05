@@ -88,4 +88,23 @@ public class Generators {
         return key;
     }
     
+    /**
+     * Construye y devuelve un mensaje seguro: origen:destino:cantidad:nonce_hex:mac_hex
+     * El MAC se calcula sobre "origen:destino:cantidad:nonce_hex".
+     * @param transferenciaBase
+     * @return
+     */
+    public static String transferenciaSegura(String transferenciaBase, int nonce, byte[] key) {
+        // transferenciaBase ejemplo: "ES8384:ES3476:1000"
+        byte[] nonceBytes = utils.Generators.nonce(nonce);
+        String nonceHex = utils.Parser.bytesToHex(nonceBytes);
+
+        String mensajeParaMac = transferenciaBase + ":" + nonceHex;
+        String mac = utils.Generators.mac(mensajeParaMac, key);
+        if (mac == null) return null;
+
+        String mensajeTotal = mensajeParaMac + ":" + mac;
+        return mensajeTotal;
+    }
+    
 }

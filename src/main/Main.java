@@ -14,14 +14,20 @@ import java.util.Set;
 
 public class Main {
 
+    public static final byte[] SECRET_KEY = "ClaveSuperSecreta123!".getBytes(StandardCharsets.UTF_8);
+    public static final int SALT_BYTES = 16; // 128 bits
+    public static final int NONCE_BYTES = 16; // 128 bits
+    
+    private static final Set<String> noncesEmpleados = new HashSet<>();
+    
 	public static void main(String[] args) {
 		// TODO Auto-generated method stub
 		System.out.println("=== Inicializando servidor (demo) ===");
-        initDatabase();
+        BaseDatos.init(); 
         //Comenzamos registrando 3 usuarios por defecto
-        registrarUsuario("Paco Flores", "paquito33");
-        registrarUsuario("Alberto Chicote", "PesadillaCocina78");
-        registrarUsuario("David Bisbal", "AveMaria45");
+        BaseDatos.userSign("Paco Flores", "paquito33");
+        BaseDatos.userSign("Alberto Chicote", "PesadillaCocina78");
+        BaseDatos.userSign("David Bisbal", "AveMaria45");
         
         //Le preguntamos al usuario que quiere hacer
         Scanner opciones = new Scanner(System.in);
@@ -37,9 +43,9 @@ public class Main {
             user = opciones.next();
             System.out.println("Introduce tu contraa:");
             passw = opciones.next();
-            manejoCredenciales(user, passw);
+            Boolean login = BaseDatos.userLogin(user, passw);
             
-			if (manejoCredenciales(user, passw)) {
+			if (login) {
 				System.out.println("Has iniciado sesion con exito");
 				intentos = true;
 			} else {
@@ -52,7 +58,7 @@ public class Main {
 			user = opciones.next();
 			System.out.println("Introduce la contraseña que quieres registrar:");
 			passw = opciones.next();
-			boolean registro = registrarUsuario(user, passw);
+			boolean registro = BaseDatos.userSign(user, passw);
 			if (registro) {
                 System.out.println("Usuario registrado con exito");
                 intentos = true;
@@ -68,12 +74,12 @@ public class Main {
         }
         }
         // 2) Simular login y transferencias
-        boolean acceso = manejoCredenciales("usuarioPrueba", "password123");
+        boolean acceso = BaseDatos.userLogin("usuarioPrueba", "password123");
         System.out.println("¿Acceso concedido? " + acceso);
 
         // ---------------- PRUEBA TRANSFERENCIA SEGURA VALIDA ----------------
         String transferenciaBase = "ES8384:ES3476:1000";
-        String mensajeSeguro = enviarTransferenciaSegura(transferenciaBase);
+        String mensajeSeguro = utils.Generators.transferenciaSegura(transferenciaBase, NONCE_BYTES, SECRET_KEY);
         System.out.println("\nMensaje seguro generado: " + mensajeSeguro);
 
         String[] datosTransferenciaSegura = mensajeSeguro.split(":");
@@ -96,233 +102,6 @@ public class Main {
     
 
 	}
-	
-	// =================== CONSTANTES / ESTADO =========================
-    private static final String DB_FILE = "bbdd.db";
-    private static final int SALT_BYTES = 16; // 128 bits
-    private static final int NONCE_BYTES = 16; // 128 bits
-	
-	// =================== ATRIBUTOS ======================
-    private static final byte[] SECRET_KEY = "ClaveSuperSecreta123!".getBytes(StandardCharsets.UTF_8);
-    private static final Set<String> noncesEmpleados = new HashSet<>();
-    private static Connection conn; // conexión a la base de datos
-    
-
-
-    /**
-     * Comparación segura (tiempo constante) de MACs o hashes representados como hex.
-     */
-    private static boolean secureEqualsHex(String aHex, String bHex) {
-        if (aHex == null || bHex == null) return false;
-        byte[] a = utils.Parser.hexToBytes(aHex);
-        byte[] b = utils.Parser.hexToBytes(bHex);
-        return MessageDigest.isEqual(a, b);
-    }    
- // =================== BBDD (SQLite) ==============================
-
-    /**
-     * Crea/abre la conexión SQLite
-     */
-    public static Connection createConnection(String dbFile) {
-        try {
-            String url = "jdbc:sqlite:" + dbFile;
-            Connection c = DriverManager.getConnection(url);
-            return c;
-        } catch (SQLException e) {
-            System.err.println("Error creando conexión: " + e.getMessage());
-            System.out.println("¿Has añadido la dependencia de SQLite en el pom.xml?");
-            return null;
-        }
-    }
-    
-    /**
-     * Inicializa la BBDD si no existe: tablas usuarios y transacciones
-     * No hace falta en principio 
-     */
-    public static void initDatabase() {
-        conn = createConnection(DB_FILE);
-        if (conn == null) {
-            throw new IllegalStateException("No se pudo abrir la BBDD");
-        }
-        String createUsuarios = "CREATE TABLE IF NOT EXISTS usuarios (" +
-                "username TEXT PRIMARY KEY," +
-                "password_hash TEXT NOT NULL," +
-                "salt TEXT NOT NULL" +
-                ");";
-        String createTrans = "CREATE TABLE IF NOT EXISTS transacciones (" +
-                "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "origen TEXT," +
-                "destino TEXT," +
-                "cantidad TEXT," +
-                "nonce TEXT," +
-                "mac TEXT," +
-                "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
-                ");";
-        try (Statement st = conn.createStatement()) {
-            st.execute(createUsuarios);
-            st.execute(createTrans);
-            System.out.println("Base de datos inicializada correctamente.");
-        } catch (SQLException e) {
-            throw new RuntimeException("Error creando tablas: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * Registra un usuario con salt+hash. Devuelve true si creado, false si ya existe.
-     */
-    public static boolean registrarUsuario(String username, String password) {
-        if (conn == null) initDatabase();
-
-        String check = "SELECT username FROM usuarios WHERE username = ?";
-        try (PreparedStatement ps = conn.prepareStatement(check)) {
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (rs.next()) {
-                    return false;
-                }
-            }
-        } catch (SQLException e) {
-            System.err.println("Error consultando usuario: " + e.getMessage());
-            return false;
-        }
-
-        // generar salt y hash
-        byte[] salt = utils.Generators.salt(SALT_BYTES);
-        String saltHex = utils.Parser.bytesToHex(salt);
-        String hash = utils.Generators.hashWithSalt(password, salt);
-
-        String insert = "INSERT INTO usuarios(username, password_hash, salt) VALUES(?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(insert)) {
-            ps.setString(1, username);
-            ps.setString(2, hash);
-            ps.setString(3, saltHex);
-            ps.executeUpdate();
-            return true;
-        } catch (SQLException e) {
-            System.err.println("Error insertando usuario: " + e.getMessage());
-            return false;
-        }
-    }
-
-    /**
-     * Verifica credenciales contra la BBDD. Devuelve true si coincide.
-     */
-    public static boolean checkUser(String username, String password) {
-        if (conn == null) initDatabase();
-        String sql = "SELECT password_hash, salt FROM usuarios WHERE username = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return false;
-                String storedHash = rs.getString("password_hash");
-                String saltHex = rs.getString("salt");
-                byte[] salt = utils.Parser.hexToBytes(saltHex);
-                String computed = utils.Generators.hashWithSalt(password, salt);
-                // comparación segura
-                return secureEqualsHex(storedHash, computed);
-            }
-        } catch (SQLException e) {
-            System.err.println("Error verificando usuario: " + e.getMessage());
-            return false;
-        }
-    }
-    
-    // =================== LOGIN / LOGOUT =========================
-
-    /**
-     * Manejo de credenciales: intenta login. Devuelve true si ok.
-     */
-    public static boolean manejoCredenciales(String user, String passw) {
-        System.out.printf("Intento de login -> user: %s%n", user);
-        boolean ok = checkUser(user, passw);
-        if (ok) {
-            System.out.println("Login ok");
-        } else {
-            System.out.println("Las credenciales no son correctas");
-        }
-        return ok;
-    }
-    
- // =================== TRANSFERENCIAS SEGURAS =====================
-
-    /**
-     * Construye y devuelve un mensaje seguro: origen:destino:cantidad:nonce_hex:mac_hex
-     * El MAC se calcula sobre "origen:destino:cantidad:nonce_hex".
-     */
-    public static String enviarTransferenciaSegura(String transferenciaBase) {
-        // transferenciaBase ejemplo: "ES8384:ES3476:1000"
-        byte[] nonceBytes = utils.Generators.nonce(NONCE_BYTES);
-        String nonceHex = utils.Parser.bytesToHex(nonceBytes);
-
-        String mensajeParaMac = transferenciaBase + ":" + nonceHex;
-        String mac = utils.Generators.mac(mensajeParaMac, SECRET_KEY);
-        if (mac == null) return null;
-
-        String mensajeTotal = mensajeParaMac + ":" + mac;
-        return mensajeTotal;
-    }
-
-    /**
-     * Verifica MAC de forma segura.
-     */
-    public static boolean verificarMac(String transferenciaCompleta, String macRecibido) {
-        // transferenciaCompleta debe ser "origen:destino:cantidad:nonce"
-        String macCalculado = utils.Generators.mac(transferenciaCompleta, SECRET_KEY);
-        return secureEqualsHex(macCalculado, macRecibido);
-    }
-
-    /**
-     * Registra una transacción en la BBDD (sin validar cuentas/cantidades).
-     */
-    private static void registrarTransaccion(String origen, String destino, String cantidad, String nonce, String mac) {
-        if (conn == null) initDatabase();
-        String insert = "INSERT INTO transacciones(origen, destino, cantidad, nonce, mac) VALUES(?, ?, ?, ?, ?)";
-        try (PreparedStatement ps = conn.prepareStatement(insert)) {
-            ps.setString(1, origen);
-            ps.setString(2, destino);
-            ps.setString(3, cantidad);
-            ps.setString(4, nonce);
-            ps.setString(5, mac);
-            ps.executeUpdate();
-        } catch (SQLException e) {
-            System.err.println("Error al registrar transacción: " + e.getMessage());
-        }
-    }
-
-    /**
-     * Manejo de transferencia (completa) que exige estar logueado y verificar nonce+mac.
-     */
-    public static void manejoTransferencia(String origen, String destino, String cantidad,
-                                           String nonce, String mac, boolean logged) {
-        System.out.println("\n*** INICIANDO VERIFICACIÓN DE TRANSFERENCIA ***");
-        if (!logged) {
-            System.out.println("El usuario no ha conseguido loguearse, no puede realizar esta operación");
-            return;
-        }
-
-        // 1. comprobar si nonce ya usado (replay)
-        if (noncesEmpleados.contains(nonce)) {
-            System.err.println("ERROR: Nonce ya utilizado. Posible ataque de repetición.");
-            return;
-        }
-
-        // 2. verificar mac
-        String mensajeBase = String.join(":", origen, destino, cantidad, nonce);
-        if (!verificarMac(mensajeBase, mac)) {
-            System.err.println("ERROR: MAC inválido. El mensaje ha sido alterado o clave incorrecta.");
-            System.out.println("MAC recibido: " + mac);
-            String esperado =  utils.Generators.mac(mensajeBase, SECRET_KEY);
-            System.out.println("MAC esperado: " + esperado);
-            return;
-        }
-
-        // 3. éxito: registrar nonce y transacción
-        noncesEmpleados.add(nonce);
-        System.out.println("ÉXITO: Transferencia verificada y MAC válido.");
-        System.out.println("Procesando transferencia de " + cantidad + " de " + origen + " a " + destino);
-        registrarTransaccion(origen, destino, cantidad, nonce, mac);
-    }
-
     // =================== PROCESADOR DE COMANDOS =====================
 
     /**
@@ -341,7 +120,7 @@ public class Main {
             System.out.println("Se ha recibido un intento de login");
             String user = dataSplit[0];
             String passw = dataSplit[1];
-            manejoCredenciales(user, passw);
+            BaseDatos.userLogin(user, passw);
 
         } else if (len == 3) {
             System.out.println("Se ha recibido un intento de transferencia (Formato Antiguo)");
@@ -351,7 +130,7 @@ public class Main {
             if (logged) {
                 System.out.println("El usuario está logueado, puede realizar esta operación");
                 // No hay nonce/mac en este formato: registramos directamente
-                registrarTransaccion(origen, destino, cantidad, null, null);
+                BaseDatos.transaccion(origen, destino, cantidad, cantidad, userValido);
                 System.out.println("Transferencia realizada (sin integridad MAC).");
             } else {
                 System.out.println("El usuario no está logueado. No se permite transferencia.");
@@ -373,5 +152,39 @@ public class Main {
         } else {
             System.out.println("Error: formato de comando incorrecto.");
         }
+    }
+    
+    /**
+     * Manejo de transferencia (completa) que exige estar logueado y verificar nonce+mac.
+     */
+    public static void manejoTransferencia(String origen, String destino, String cantidad,
+                                           String nonce, String mac, boolean logged) {
+        System.out.println("\n*** INICIANDO VERIFICACIÓN DE TRANSFERENCIA ***");
+        if (!logged) {
+            System.out.println("El usuario no ha conseguido loguearse, no puede realizar esta operación");
+            return;
+        }
+
+        // 1. comprobar si nonce ya usado (replay)
+        if (noncesEmpleados.contains(nonce)) {
+            System.err.println("ERROR: Nonce ya utilizado. Posible ataque de repetición.");
+            return;
+        }
+
+        // 2. verificar mac
+        String mensajeBase = String.join(":", origen, destino, cantidad, nonce);
+        if (!BaseDatos.mac(mensajeBase, mac)) {
+            System.err.println("ERROR: MAC inválido. El mensaje ha sido alterado o clave incorrecta.");
+            System.out.println("MAC recibido: " + mac);
+            String esperado =  utils.Generators.mac(mensajeBase, SECRET_KEY);
+            System.out.println("MAC esperado: " + esperado);
+            return;
+        }
+
+        // 3. éxito: registrar nonce y transacción
+        noncesEmpleados.add(nonce);
+        System.out.println("ÉXITO: Transferencia verificada y MAC válido.");
+        System.out.println("Procesando transferencia de " + cantidad + " de " + origen + " a " + destino);
+        BaseDatos.transaccion(origen, destino, cantidad, nonce, mac);
     }
 }
