@@ -6,65 +6,132 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.net.UnknownHostException;
 
+import javax.swing.JButton;
+import javax.swing.JFrame;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+
+import utils.Generators;
+import utils.Parser;
 
 public class ClientSocket {
-	private final String IP;
-	private final Integer PORT;
-	
-	public static void main(String[] args) {
-		new ClientSocket("localhost", 4011).init();;
-	}
-	
-	public ClientSocket(String ip, Integer port) {
-		this.IP = ip;
-		this.PORT = port;
-	}
-	
-	public void init() {
-		try (Socket socket = new Socket(IP, PORT);
-				PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
-				BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()))) {
+    private final String IP;
+    private final Integer PORT;
 
-			// Pedir login
+    private final PrintWriter output;
+
+    private final Socket socket;
+
+    public static void main(String[] args) throws UnknownHostException, IOException {
+        new ClientSocket("localhost", 4011).showMainWindow();
+    }
+
+    public ClientSocket(String ip, Integer port) throws UnknownHostException, IOException {
+        this.IP = ip;
+        this.PORT = port;
+        this.socket = new Socket(IP, PORT);
+        this.output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true);
+    }
+
+    // ======== Interfaz principal ========
+    public void showMainWindow() {
+        JFrame frame = new JFrame("Client Socket - Banking App");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(300, 150);
+        frame.setLocationRelativeTo(null);
+
+        JPanel panel = new JPanel();
+        JButton loginButton = new JButton("Log In");
+        JButton signupButton = new JButton("Sign In");
+        JButton exitButton = new JButton("Exit");
+
+        // Acción: Log In
+        loginButton.addActionListener(e -> {
+            login();
+        });
+
+        // Acción: Sign In
+        signupButton.addActionListener(e -> {
+            sign();
+        });
+        
+        exitButton.addActionListener(e -> {
+            try {
+                this.output.println("EXIT"); // notificar al servidor
+                this.output.flush();
+            } catch (Exception ex) {
+                ex.printStackTrace();
+            }
+            frame.dispose(); // cierra solo la ventana
+            // o usar System.exit(0) si quieres terminar la aplicación completa
+        });
+
+
+        panel.add(loginButton);
+        panel.add(signupButton);
+        panel.add(exitButton);
+
+        frame.add(panel);
+        frame.setVisible(true);
+    }
+    
+    
+	public void login() {
+		try {
+			BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			
 			String userName = JOptionPane.showInputDialog("Usuario:");
-			String password = JOptionPane.showInputDialog("Contraseña:");
-			output.println("LOGIN:" + userName + ":" + password);
-
+			this.output.println("SALT," + userName);
+			
 			String response = input.readLine();
+			
+			if(response.isEmpty()) {
+				System.err.println("Usuario incorrecto.");
+				JOptionPane.showMessageDialog(null, "Servidor: " + "Usuario incorrecto");
+				return;
+			}
+			
+			byte[] salt = Parser.hexToBytes(response);
+			
+			String password = JOptionPane.showInputDialog("Contraseña:");
+			String hashPassword = Generators.hashWithSalt(password, salt);
+			String mac = Generators.mac(hashPassword, Main.SECRET_KEY);
+			
+			this.output.println("LOGIN," + userName + "," + hashPassword + "," + mac);
+
+			response = input.readLine();
 			JOptionPane.showMessageDialog(null, "Servidor: " + response);
 
 			if (!"OK".equals(response)) {
 				JOptionPane.showMessageDialog(null, "Login fallido, cerrando cliente");
 				return;
 			}
-
-			// Si login OK → menú de acciones
-			while (true) {
-				String opcion = JOptionPane.showInputDialog("Elige una opción:\n1. Hacer transferencia\n2. Salir");
-
-				if ("1".equals(opcion)) {
-					String origen = JOptionPane.showInputDialog("Cuenta origen:");
-					String destino = JOptionPane.showInputDialog("Cuenta destino:");
-					String cantidad = JOptionPane.showInputDialog("Cantidad:");
-					// Aquí podrías generar nonce + mac usando utils.Generators
-					String mensaje = "TRANSFER:" + origen + ":" + destino + ":" + cantidad + ":nonce:mac";
-					output.println(mensaje);
-					String respTransfer = input.readLine();
-					JOptionPane.showMessageDialog(null, "Servidor: " + respTransfer);
-				} else {
-					break;
-				}
-			}
-
-		} catch (IOException e) {
+		} catch (Exception e) {
 			e.printStackTrace();
 		}
 	}
 	
-	public void stop() {
-		
+	public void sign() {
+		try {
+			BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+			
+			String userName = JOptionPane.showInputDialog("Usuario:");
+			String password = JOptionPane.showInputDialog("Contraseña:");
+			
+			byte[] salt = Generators.salt(Main.SALT_BYTES);
+			String hashPassword = Generators.hashWithSalt(password, salt);
+			String mac = Generators.mac(hashPassword, Main.SECRET_KEY);
+			
+			this.output.println("SIGN," + userName + "," + hashPassword + "," + mac + "," + utils.Parser.bytesToHex(salt));
+
+			String response = input.readLine();
+			JOptionPane.showMessageDialog(null, "Servidor: " + response);
+			
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
 	}
 
 	/**

@@ -7,6 +7,9 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
+import utils.Generators;
+import utils.Parser;
+
 // =================== BBDD (SQLite) ==============================
 public class BaseDatos {
 	
@@ -48,9 +51,9 @@ public class BaseDatos {
     public static void initDemo() {
     	init();
     	
-        BaseDatos.userSign("Paco Flores", "paquito33");
-        BaseDatos.userSign("Alberto Chicote", "PesadillaCocina78");
-        BaseDatos.userSign("David Bisbal", "AveMaria45");
+        BaseDatos.userSign("Paco Flores", "paquito33",Generators.salt(Main.SALT_BYTES));
+        BaseDatos.userSign("Alberto Chicote", "PesadillaCocina78",Generators.salt(Main.SALT_BYTES));
+        BaseDatos.userSign("David Bisbal", "AveMaria45",Generators.salt(Main.SALT_BYTES));
     }
 
     /**
@@ -72,7 +75,7 @@ public class BaseDatos {
     /**
      * Registra un usuario con salt+hash. Devuelve true si creado, false si ya existe.
      */
-    public static boolean userSign(String username, String password) {
+    public static boolean userSign(String username, String password, byte[] salt) {
         if (conn == null) init();
 
         String check = "SELECT username FROM usuarios WHERE username = ?";
@@ -89,16 +92,13 @@ public class BaseDatos {
             return false;
         }
 
-        // generar salt y hash
-        byte[] salt = utils.Generators.salt(Main.SALT_BYTES);
-        String saltHex = utils.Parser.bytesToHex(salt);
-        String hash = utils.Generators.hashWithSalt(password, salt);
-
+        System.out.println("Contraseña:  " + password);
+        
         String insert = "INSERT INTO usuarios(username, password_hash, salt) VALUES(?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(insert)) {
             ps.setString(1, username);
-            ps.setString(2, hash);
-            ps.setString(3, saltHex);
+            ps.setString(2, password);
+            ps.setString(3, Parser.bytesToHex(salt));
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
@@ -117,12 +117,16 @@ public class BaseDatos {
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
                 if (!rs.next()) return false;
-                String storedHash = rs.getString("password_hash");
-                String saltHex = rs.getString("salt");
-                byte[] salt = utils.Parser.hexToBytes(saltHex);
-                String computed = utils.Generators.hashWithSalt(password, salt);
+                String storedHash = rs.getString("password_hash");                
+
                 // comparación segura
-                return utils.Parser.equalsHex(storedHash, computed);
+                boolean equals = utils.Parser.equalsHex(storedHash, password);
+                
+                System.out.println(String.format("Credenciales del usuario: \t%s", username));
+                System.out.println(String.format("Comparación de claves base de datos e input: %n%s %n%s", storedHash, password));
+                System.err.println("Son iguales: " + equals);
+                
+                return equals;
             }
         } catch (SQLException e) {
             System.err.println("Error verificando usuario: " + e.getMessage());
@@ -136,15 +140,55 @@ public class BaseDatos {
      * Manejo de credenciales: intenta login. Devuelve true si ok.
      */
     public static boolean userLogin(String user, String passw) {
-        System.out.printf("Intento de login -> user: %s%n", user);
-        boolean ok = user(user, passw);
-        if (ok) {
+        System.out.printf("============Intento de login============%n user: %s%npwd: %s%n", user, passw);
+        boolean res = user(user, passw);
+        
+        if (res) {
             System.out.println("Login ok");
         } else {
-            System.out.println("Las credenciales no son correctas");
+            System.err.println("Las credenciales no son correctas o el usuario no existe");
         }
-        return ok;
+        return res;
     }
+    
+    public static boolean userExist(String user) {
+        if (conn == null) init(); // inicializa la BD si aún no está
+
+        String sql = "SELECT 1 FROM usuarios WHERE username = ? LIMIT 1";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, user);
+            try (ResultSet rs = ps.executeQuery()) {
+                // Si rs.next() devuelve true, el usuario existe
+                return rs.next();
+            }
+        } catch (SQLException e) {
+            System.err.println("Error verificando existencia de usuario: " + e.getMessage());
+            return false;
+        }
+    }
+
+    
+    /**
+     * Devuelve el salt del usuario en bytes.
+     * Retorna null si el usuario no existe o hay un error.
+     */
+    public static byte[] getUserSalt(String username) {
+        if (conn == null) init(); // inicializa la BD si es necesario
+        
+        String sql = "SELECT salt FROM usuarios WHERE username = ?";
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, username);
+            try (ResultSet rs = ps.executeQuery()) {
+                if (!rs.next()) return null; // usuario no encontrado
+                String saltHex = rs.getString("salt");
+                return utils.Parser.hexToBytes(saltHex); // convertir de hex a byte[]
+            }
+        } catch (SQLException e) {
+            System.err.println("Error obteniendo salt del usuario: " + e.getMessage());
+            return null;
+        }
+    }
+
     
     // =================== TRANSFERENCIAS SEGURAS =====================
     /**
