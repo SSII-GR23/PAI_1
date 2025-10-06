@@ -7,56 +7,104 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
 
+import utils.Parser;
+
+
 public class ServerSocket {
-	java.net.ServerSocket serverSocket;
-	
-	public static void main(String[] args) throws IOException {
-		new ServerSocket(4011).init();;
-	}
-	
-	
-	public ServerSocket(int port) throws IOException {
-		this.serverSocket = new java.net.ServerSocket(port);
-	}
-	
-	public void init() throws IOException {
-		while (true) {
+    private final java.net.ServerSocket serverSocket;
 
-			// wait for client connection and check login information
-			try {
-				System.err.println("Waiting for connection...");
+    public static void main(String[] args) throws IOException {
+        new ServerSocket(4011).init();
+    }
 
-				Socket socket = serverSocket.accept();
+    public ServerSocket(int port) throws IOException {
+        this.serverSocket = new java.net.ServerSocket(port);
+    }
 
-				// open BufferedReader for reading data from client
-				BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+    public void init() throws IOException {
+    	BaseDatos.initDemo();
+        System.out.println("Servidor iniciado. Esperando conexiones...");
 
-				// open PrintWriter for writing data to client
-				PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
-				String userName = input.readLine();
-				String password = input.readLine();
-				output.println("User, " + userName);
-				output.println("Pass, " + password);
+        while (true) {
+            try {
+                Socket socket = serverSocket.accept();
+                System.out.println("Cliente conectado desde " + socket.getInetAddress());
 
-				output.close();
-				input.close();
-				socket.close();
+                // Lanzamos un hilo por cliente, para no bloquear el servidor
+                new Thread(() -> handleClient(socket)).start();
 
-			} // end try
+            } catch (IOException ioException) {
+                ioException.printStackTrace();
+            }
+        }
+    }
 
-			// handle exception communicating with client
-			catch (IOException ioException) {
-				ioException.printStackTrace();
-			}
-		}
-	}
-	
-	public Socket accept() throws IOException {
-		return this.serverSocket.accept();
-	}
+    private void handleClient(Socket socket) {
+        try (
+            BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+            PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()), true)
+        ) {
+            String line;
 
-	public void close() throws IOException {
-		this.serverSocket.close();
-	}
+            // Bucle persistente mientras el cliente siga conectado
+            while ((line = input.readLine()) != null) {
+                System.out.println("Recibido: " + line);
 
+                String[] userData = line.split(",");
+                String command = userData[0];
+                String response;
+                
+                switch (command) {
+                	case "SALT":
+                		byte[] salt = BaseDatos.getUserSalt(userData[1]);
+                		System.err.println(String.format("Salt del usuario %s:\t %s",userData[1],Parser.bytesToHex(salt)));
+                		response = salt == null ? "" : Parser.bytesToHex(salt);
+                		break;
+                    case "LOGIN":
+                        boolean ok = getUserDataBase(userData);
+                        response = ok ? "OK" : "ERROR: Usuario o contraseña incorrectos.";
+                        break;
+
+                    case "SIGN":
+                        response = setUserDataBase(userData);
+                        break;
+
+                    case "EXIT":
+                        response = "Desconectado del servidor.";
+                        output.println(response);
+                        System.out.println("Cliente desconectado.");
+                        socket.close();
+                        return; // 🔚 Sale del hilo
+
+                    default:
+                        response = "ERROR: Comando no reconocido.";
+                        break;
+                }
+
+                output.println(response);
+            }
+
+        } catch (IOException e) {
+            System.out.println("Cliente desconectado abruptamente: " + e.getMessage());
+        }
+    }
+
+    public Boolean getUserDataBase(String... data) {
+        return BaseDatos.userLogin(data[1], data[2]);
+    }
+
+    public String setUserDataBase(String... data) {
+        Boolean exists = BaseDatos.userExist(data[1]);
+
+        if (exists) {
+            String out = String.format("Usuario '%s' ya existe. Prueba un nombre diferente.", data[1]);
+            System.err.println(out);
+            return out;
+        }
+
+        BaseDatos.userSign(data[1], data[2], Parser.hexToBytes(data[4]));
+        String out = String.format("Usuario '%s' creado correctamente.", data[1]);
+        System.out.println(out);
+        return out;
+    }
 }
