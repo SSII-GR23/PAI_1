@@ -1,5 +1,7 @@
 package utils;
 
+import java.security.MessageDigest;
+
 public class Parser {
     private static final char[] HEX_ARRAY = "0123456789ABCDEF".toCharArray();
     
@@ -32,4 +34,18 @@ public class Parser {
         }
         return out;
     }
+	
+	/**
+	 * Comparación segura (tiempo constante) de MACs o hashes representados como hex.
+	 * @param aHex
+	 * @param bHex
+	 * @return
+	 */
+    public static boolean equalsHex(String aHex, String bHex) {
+        if (aHex == null || bHex == null) return false;
+        byte[] a = utils.Parser.hexToBytes(aHex);
+        byte[] b = utils.Parser.hexToBytes(bHex);
+        return MessageDigest.isEqual(a, b);
+    }    
+
 }
