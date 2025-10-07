@@ -216,7 +216,8 @@ public class ClientSocket {
 				JOptionPane.showMessageDialog(null, "Servidor: " + response);
 
 				if (!"OK".equals(response)) {
-					JOptionPane.showMessageDialog(null, "Login fallido, cerrando cliente");
+					JOptionPane.showMessageDialog(null, "Transacción finalizada");
+					showTransitionsWindow();
 					return;
 				}
 				

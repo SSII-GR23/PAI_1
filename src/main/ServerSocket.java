@@ -9,6 +9,7 @@ import java.net.Socket;
 
 import auth.Login;
 import auth.Signin;
+import trans.Transaccion;
 import utils.Generators;
 import utils.Parser;
 
@@ -101,6 +102,16 @@ public class ServerSocket {
                         socket.close();
                         return; // 🔚 Sale del hilo
 
+                    case "Transaccion":
+                    	Transaccion trans = Transaccion.of(userData);
+                    	
+                    	if(!compareMac(trans.macMessage, trans.mac)) {
+                    		response = "ERROR: El mensaje ha sido modificado.";
+                    		break;
+                    	}
+                    	
+                        response = transaccion(trans);
+                        break; // 🔚 Sale del hilo
                     default:
                         response = "ERROR: Comando no reconocido.";
                         break;
@@ -135,5 +146,18 @@ public class ServerSocket {
     
     public boolean compareMac(String message, String mac) {
     	return mac.equals(Generators.mac(message, Main.SECRET_KEY));
+    }
+    
+    public String transaccion(Transaccion trans) {
+    	String res = "ERROR: Mensaje duplicado";
+    	
+    	if(!BaseDatos.nonceExiste(trans.nonse)) {
+    		res = "Transacción añadida a la base de datos";
+    		
+    		BaseDatos.transaccion(trans.message, trans.nonse, trans.mac);
+    		BaseDatos.registrarNonce(trans.nonse);
+    	}
+    	
+    	return res;
     }
 }
