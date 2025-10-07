@@ -32,16 +32,21 @@ public class BaseDatos {
                 ");";
         String createTrans = "CREATE TABLE IF NOT EXISTS transacciones (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
-                "origen TEXT," +
-                "destino TEXT," +
-                "cantidad TEXT," +
+                "hash TEXT," +
                 "nonce TEXT," +
                 "mac TEXT," +
                 "timestamp DATETIME DEFAULT CURRENT_TIMESTAMP" +
                 ");";
+        
+        String createNonceTable = "CREATE TABLE IF NOT EXISTS nonces (" +
+                "nonce TEXT PRIMARY KEY" +
+                ");";
+
+        
         try (Statement st = conn.createStatement()) {
             st.execute(createUsuarios);
             st.execute(createTrans);
+            st.execute(createNonceTable);
             System.out.println("Base de datos inicializada correctamente.");
         } catch (SQLException e) {
             throw new RuntimeException("Error creando tablas: " + e.getMessage(), e);
@@ -187,15 +192,13 @@ public class BaseDatos {
     /**
      * Registra una transacción en la BBDD (sin validar cuentas/cantidades).
      */
-    public static void transaccion(String origen, String destino, String cantidad, String nonce, String mac) {
+    public static void transaccion(String message, String nonce, String mac) {
         if (conn == null) init();
-        String insert = "INSERT INTO transacciones(origen, destino, cantidad, nonce, mac) VALUES(?, ?, ?, ?, ?)";
+        String insert = "INSERT INTO transacciones(hash, nonce, mac) VALUES(?, ?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(insert)) {
-            ps.setString(1, origen);
-            ps.setString(2, destino);
-            ps.setString(3, cantidad);
-            ps.setString(4, nonce);
-            ps.setString(5, mac);
+        	ps.setString(1, message);
+        	ps.setString(2, nonce);
+            ps.setString(3, mac);
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error al registrar transacción: " + e.getMessage());
@@ -224,4 +227,51 @@ public class BaseDatos {
             System.err.println("Error cerrando conexión: " + e.getMessage());
         }
     }
+    
+    /**
+     * Verifica si un NONCE ya existe en la tabla nonces.
+     * Devuelve true si existe, false si no.
+     */
+    public static boolean nonceExiste(String nonce) {
+        if (conn == null) init(); // Asegura que la conexión esté abierta
+        
+        String sql = "SELECT 1 FROM nonces WHERE nonce = ? LIMIT 1";
+        
+        try (PreparedStatement ps = conn.prepareStatement(sql)) {
+            ps.setString(1, nonce);
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next(); // true si encontró una fila, false si no
+            }
+        } catch (SQLException e) {
+            System.err.println("Error verificando nonce: " + e.getMessage());
+            return false;
+        }
+    }
+    
+    /**
+     * Inserta un NONCE en la base de datos si no existe.
+     * Devuelve true si fue insertado, false si ya estaba.
+     */
+    public static boolean registrarNonce(String nonce) {
+        if (conn == null) init();
+        
+        if (nonceExiste(nonce)) {
+            System.out.println("El nonce ya existe en la base de datos.");
+            return false;
+        }
+        
+        String insert = "INSERT INTO nonces(nonce) VALUES(?)";
+        
+        try (PreparedStatement ps = conn.prepareStatement(insert)) {
+            ps.setString(1, nonce);
+            ps.executeUpdate();
+            System.out.println("Nonce registrado correctamente.");
+            return true;
+        } catch (SQLException e) {
+            System.err.println("Error insertando nonce: " + e.getMessage());
+            return false;
+        }
+    }
+
+
 }
