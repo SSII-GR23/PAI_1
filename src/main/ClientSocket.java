@@ -13,8 +13,10 @@ import javax.swing.JFrame;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 
+import auth.Auth;
+import auth.Login;
+import auth.Signin;
 import utils.Generators;
-import utils.Parser;
 
 public class ClientSocket {
     private final String IP;
@@ -82,32 +84,25 @@ public class ClientSocket {
 		try {
 			BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
 			
-			String userName = JOptionPane.showInputDialog("Usuario:");
-			this.output.println("SALT," + userName);
+			String userName = JOptionPane.showInputDialog("Usuario:").strip();
+			String password = JOptionPane.showInputDialog("Contraseña:").strip();
 			
-			String response = input.readLine();
+			Auth message = new Login(userName.trim(), password.trim());
 			
-			if(response.isEmpty()) {
-				System.err.println("Usuario incorrecto.");
-				JOptionPane.showMessageDialog(null, "Servidor: " + "Usuario incorrecto");
-				return;
-			}
-			
-			byte[] salt = Parser.hexToBytes(response);
-			
-			String password = JOptionPane.showInputDialog("Contraseña:");
-			String hashPassword = Generators.hashWithSalt(password, salt);
-			String mac = Generators.mac(hashPassword, Main.SECRET_KEY);
-			
-			this.output.println("LOGIN," + userName + "," + hashPassword + "," + mac);
+			//	Mensaje al servidor
+			this.output.println(message);
 
-			response = input.readLine();
+			//	Respuesta del servidor
+			String response = input.readLine();
 			JOptionPane.showMessageDialog(null, "Servidor: " + response);
 
 			if (!"OK".equals(response)) {
 				JOptionPane.showMessageDialog(null, "Login fallido, cerrando cliente");
 				return;
 			}
+			
+			showTransitionsWindow();
+			
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -119,12 +114,12 @@ public class ClientSocket {
 			
 			String userName = JOptionPane.showInputDialog("Usuario:");
 			String password = JOptionPane.showInputDialog("Contraseña:");
+			Auth message = new Signin(userName.trim(), password.trim());
 			
-			byte[] salt = Generators.salt(Main.SALT_BYTES);
-			String hashPassword = Generators.hashWithSalt(password, salt);
-			String mac = Generators.mac(hashPassword, Main.SECRET_KEY);
+			System.out.println("Mensaje:" + message.toString());
 			
-			this.output.println("SIGN," + userName + "," + hashPassword + "," + mac + "," + utils.Parser.bytesToHex(salt));
+			//	Mensaje al servidor
+			this.output.println(message);
 
 			String response = input.readLine();
 			JOptionPane.showMessageDialog(null, "Servidor: " + response);
@@ -133,58 +128,84 @@ public class ClientSocket {
 			e.printStackTrace();
 		}
 	}
+	
+	public void showTransitionsWindow() {
+	    JFrame frame = new JFrame("Transferencia Bancaria");
+	    frame.setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
+	    frame.setSize(400, 250);
+	    frame.setLocationRelativeTo(null);
+	    frame.setLayout(new java.awt.GridBagLayout());
 
-	/**
-	 * @param args
-	 * @throws IOException
-	 */
-//	public static void main(String[] args) throws IOException {
-//		try {
-//
-//			// create Socket from factory
-//			Socket socket = new Socket("172.20.10.2", 4011);
-//
-//			// create PrintWriter for sending login to server
-//			PrintWriter output = new PrintWriter(new OutputStreamWriter(socket.getOutputStream()));
-//			// prompt user for user name
-//			String userName = JOptionPane.showInputDialog(null, "Enter User Name:");
-//
-//			// send user name to server
-//			output.println(userName);
-//
-//			// prompt user for password
-//			String password = JOptionPane.showInputDialog(null, "Enter Password:");
-//
-//			// send password to server
-//			output.println(password);
-//
-//			output.flush();
-//
-//			// create BufferedReader for reading server response
-//			BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-//
-//			// read response from server
-//			String response = input.readLine();
-//
-//			// display response to user
-//			JOptionPane.showMessageDialog(null, response);
-//
-//			// clean up streams and Socket
-//			output.close();
-//			input.close();
-//			socket.close();
-//
-//		} // end try
-//
-//		// handle exception communicating with server
-//		catch (IOException ioException) {
-//			ioException.printStackTrace();
-//		}
-//
-//		// exit application
-//		finally {
-//			System.exit(0);
-//		}
-//
-//	}
+	    java.awt.GridBagConstraints gbc = new java.awt.GridBagConstraints();
+	    gbc.insets = new java.awt.Insets(5, 5, 5, 5);
+	    gbc.fill = java.awt.GridBagConstraints.HORIZONTAL;
+
+	    // Campos de entrada
+	    javax.swing.JLabel origenLabel = new javax.swing.JLabel("Número de cuenta origen:");
+	    javax.swing.JTextField origenField = new javax.swing.JTextField(20);
+
+	    javax.swing.JLabel destinoLabel = new javax.swing.JLabel("Número de cuenta destino:");
+	    javax.swing.JTextField destinoField = new javax.swing.JTextField(20);
+
+	    javax.swing.JLabel cantidadLabel = new javax.swing.JLabel("Cantidad a transferir:");
+	    javax.swing.JTextField cantidadField = new javax.swing.JTextField(10);
+
+	    // Botones
+	    JButton cancelarButton = new JButton("Cerrar Sesión");
+	    JButton aceptarButton = new JButton("Aceptar");
+
+	    // Posicionamiento
+	    gbc.gridx = 0; gbc.gridy = 0;
+	    frame.add(origenLabel, gbc);
+	    gbc.gridx = 1; gbc.gridy = 0;
+	    frame.add(origenField, gbc);
+
+	    gbc.gridx = 0; gbc.gridy = 1;
+	    frame.add(destinoLabel, gbc);
+	    gbc.gridx = 1; gbc.gridy = 1;
+	    frame.add(destinoField, gbc);
+
+	    gbc.gridx = 0; gbc.gridy = 2;
+	    frame.add(cantidadLabel, gbc);
+	    gbc.gridx = 1; gbc.gridy = 2;
+	    frame.add(cantidadField, gbc);
+
+	    // Botones en la parte inferior
+	    JPanel buttonPanel = new JPanel();
+	    buttonPanel.add(cancelarButton);
+	    buttonPanel.add(aceptarButton);
+
+	    gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 2;
+	    frame.add(buttonPanel, gbc);
+
+	    // === Eventos ===
+
+	    // Cancelar: cerrar ventana
+	    cancelarButton.addActionListener(e -> frame.dispose());
+
+	    // Aceptar: procesar datos
+	    aceptarButton.addActionListener(e -> {
+	        String origen = origenField.getText().trim();
+	        String destino = destinoField.getText().trim();
+	        String cantidad = cantidadField.getText().trim();
+
+	        if (origen.isEmpty() || destino.isEmpty() || cantidad.isEmpty()) {
+	            JOptionPane.showMessageDialog(frame, "Por favor, rellena todos los campos.", "Error", JOptionPane.ERROR_MESSAGE);
+	            return;
+	        }
+
+	        // Aquí podrías construir y enviar la transacción al servidor
+	        // Ejemplo simple:
+	        JOptionPane.showMessageDialog(frame,
+	                "Transferencia enviada:\n" +
+	                "Origen: " + origen + "\n" +
+	                "Destino: " + destino + "\n" +
+	                "Cantidad: " + cantidad,
+	                "Confirmación", JOptionPane.INFORMATION_MESSAGE);
+
+	        frame.dispose();
+	    });
+
+	    frame.setVisible(true);
+	}
 }

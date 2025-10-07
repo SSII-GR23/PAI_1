@@ -7,7 +7,8 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 
-import utils.Generators;
+import auth.Login;
+import auth.Signin;
 import utils.Parser;
 
 // =================== BBDD (SQLite) ==============================
@@ -27,8 +28,7 @@ public class BaseDatos {
         }
         String createUsuarios = "CREATE TABLE IF NOT EXISTS usuarios (" +
                 "username TEXT PRIMARY KEY," +
-                "password_hash TEXT NOT NULL," +
-                "salt TEXT NOT NULL" +
+                "password_hash TEXT NOT NULL" +
                 ");";
         String createTrans = "CREATE TABLE IF NOT EXISTS transacciones (" +
                 "id INTEGER PRIMARY KEY AUTOINCREMENT," +
@@ -49,11 +49,16 @@ public class BaseDatos {
     }
     
     public static void initDemo() {
-    	init();
+    	reset();
+
+    	Signin user1 = new Signin("prueba1", "prueba");
+    	Signin user2 = new Signin("prueba2", "prueba");
+    	Signin user3 = new Signin("prueba3", "prueba");
     	
-        BaseDatos.userSign("Paco Flores", "paquito33",Generators.salt(Main.SALT_BYTES));
-        BaseDatos.userSign("Alberto Chicote", "PesadillaCocina78",Generators.salt(Main.SALT_BYTES));
-        BaseDatos.userSign("David Bisbal", "AveMaria45",Generators.salt(Main.SALT_BYTES));
+        BaseDatos.userSign(user1.user, user1.hashpassword);
+        BaseDatos.userSign(user2.user, user2.hashpassword);
+        BaseDatos.userSign(user3.user, user3.hashpassword);
+        System.out.println("==============================");
     }
 
     /**
@@ -75,7 +80,7 @@ public class BaseDatos {
     /**
      * Registra un usuario con salt+hash. Devuelve true si creado, false si ya existe.
      */
-    public static boolean userSign(String username, String password, byte[] salt) {
+    public static boolean userSign(String username, String password) {
         if (conn == null) init();
 
         String check = "SELECT username FROM usuarios WHERE username = ?";
@@ -92,13 +97,14 @@ public class BaseDatos {
             return false;
         }
 
+        System.out.println("================");
+        System.out.println("Usuario:  " + username);
         System.out.println("Contraseña:  " + password);
         
-        String insert = "INSERT INTO usuarios(username, password_hash, salt) VALUES(?, ?, ?)";
+        String insert = "INSERT INTO usuarios(username, password_hash) VALUES(?, ?)";
         try (PreparedStatement ps = conn.prepareStatement(insert)) {
             ps.setString(1, username);
             ps.setString(2, password);
-            ps.setString(3, Parser.bytesToHex(salt));
             ps.executeUpdate();
             return true;
         } catch (SQLException e) {
@@ -112,7 +118,7 @@ public class BaseDatos {
      */
     public static boolean user(String username, String password) {
         if (conn == null) init();
-        String sql = "SELECT password_hash, salt FROM usuarios WHERE username = ?";
+        String sql = "SELECT password_hash FROM usuarios WHERE username = ?";
         try (PreparedStatement ps = conn.prepareStatement(sql)) {
             ps.setString(1, username);
             try (ResultSet rs = ps.executeQuery()) {
@@ -168,28 +174,6 @@ public class BaseDatos {
     }
 
     
-    /**
-     * Devuelve el salt del usuario en bytes.
-     * Retorna null si el usuario no existe o hay un error.
-     */
-    public static byte[] getUserSalt(String username) {
-        if (conn == null) init(); // inicializa la BD si es necesario
-        
-        String sql = "SELECT salt FROM usuarios WHERE username = ?";
-        try (PreparedStatement ps = conn.prepareStatement(sql)) {
-            ps.setString(1, username);
-            try (ResultSet rs = ps.executeQuery()) {
-                if (!rs.next()) return null; // usuario no encontrado
-                String saltHex = rs.getString("salt");
-                return utils.Parser.hexToBytes(saltHex); // convertir de hex a byte[]
-            }
-        } catch (SQLException e) {
-            System.err.println("Error obteniendo salt del usuario: " + e.getMessage());
-            return null;
-        }
-    }
-
-    
     // =================== TRANSFERENCIAS SEGURAS =====================
     /**
      * Verifica MAC de forma segura.
@@ -215,6 +199,29 @@ public class BaseDatos {
             ps.executeUpdate();
         } catch (SQLException e) {
             System.err.println("Error al registrar transacción: " + e.getMessage());
+        }
+    }
+    
+    public static void reset() {
+        try {
+            // Cierra conexión si está abierta
+            if (conn != null && !conn.isClosed()) {
+                conn.close();
+            }
+            
+            // Borra el archivo físico
+            java.io.File file = new java.io.File(DB_FILE);
+            if (file.exists() && file.delete()) {
+                System.out.println("Archivo de base de datos eliminado correctamente.");
+            } else {
+                System.err.println("No se pudo eliminar el archivo o no existía.");
+            }
+
+            // Vuelve a inicializar
+            init();
+            
+        } catch (SQLException e) {
+            System.err.println("Error cerrando conexión: " + e.getMessage());
         }
     }
 }
