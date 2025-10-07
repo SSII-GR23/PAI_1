@@ -16,6 +16,7 @@ import javax.swing.JPanel;
 import auth.Auth;
 import auth.Login;
 import auth.Signin;
+import trans.Transaccion;
 import utils.Generators;
 
 public class ClientSocket {
@@ -193,19 +194,36 @@ public class ClientSocket {
 	            JOptionPane.showMessageDialog(frame, "Por favor, rellena todos los campos.", "Error", JOptionPane.ERROR_MESSAGE);
 	            return;
 	        }
-
-	        // Aquí podrías construir y enviar la transacción al servidor
-	        // Ejemplo simple:
-	        JOptionPane.showMessageDialog(frame,
-	                "Transferencia enviada:\n" +
-	                "Origen: " + origen + "\n" +
-	                "Destino: " + destino + "\n" +
-	                "Cantidad: " + cantidad,
-	                "Confirmación", JOptionPane.INFORMATION_MESSAGE);
+	        
+	        Transaccion trans = new Transaccion(origen + destino + cantidad);
+	        
+	        sendTransaction(trans);
 
 	        frame.dispose();
 	    });
 
 	    frame.setVisible(true);
+	}
+	
+	void sendTransaction(Transaccion trans){
+			try {
+				BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+				//	Mensaje al servidor
+				this.output.println(trans);
+
+				//	Respuesta del servidor
+				String response = input.readLine();
+				JOptionPane.showMessageDialog(null, "Servidor: " + response);
+
+				if (!"OK".equals(response)) {
+					JOptionPane.showMessageDialog(null, "Login fallido, cerrando cliente");
+					return;
+				}
+				
+				showTransitionsWindow();
+				
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
 	}
 }
